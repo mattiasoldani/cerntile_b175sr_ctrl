@@ -24,15 +24,15 @@
 #define L1 74
 
 // stopper-to-LED boolean: pushing any stopper turns off the built-in LED
-#define B_SLED 1
+#define B_SLED false
 
 // printout boolean: if true, some info are printed through the serial output
 #define B_PRINT 1
 
 // time gaps between motor pulse activation/deactivation
 // the higher the delay, the slower the motion
-#define DELAY_0 100
-#define DELAY_1 50
+#define DELAY_0 1000
+#define DELAY_1 500
 
 // test program parameters
 // - motors work one at a time, toward one direction at a time, overall tracing a rectangle
@@ -59,7 +59,7 @@ double x0, x1;
 // get booleans from stoppers
 // (HIGH = not pressed; LOW = pressed)
 // --> returns boolean representing the OR between all stoppers
-bool get_stoppers(bool & b_S0l, bool & b_S0r, bool & b_S1l, bool & b_S1r, bool B_SLED = false) {
+bool get_stoppers(bool & b_S0l, bool & b_S0r, bool & b_S1l, bool & b_S1r, bool b_led = false) {
 
   b_S0l = digitalRead(P0_SSIG_L) == LOW;
   b_S0r = digitalRead(P0_SSIG_R) == LOW;
@@ -68,7 +68,7 @@ bool get_stoppers(bool & b_S0l, bool & b_S0r, bool & b_S1l, bool & b_S1r, bool B
 
   bool bSor = b_S0l||b_S0r||b_S1l||b_S1r;
 
-  if (B_SLED) {
+  if (b_led) {
     if (bSor) {
       digitalWrite(LED_BUILTIN, LOW);
     } else {
