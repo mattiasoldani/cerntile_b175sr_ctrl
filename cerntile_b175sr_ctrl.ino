@@ -26,13 +26,19 @@
 // stopper-to-LED boolean: pushing any stopper turns off the built-in LED
 #define B_SLED 0
 
+// input path boolean: if true, list of scan coordinates is read out via serial
+#define B_READ 1
+
 // printout boolean: if true, some info are printed through the serial output
 #define B_PRINT 1
 
+// printout pitch: the higher this number, the lower the printout frequency
+#define PRINT_PITCH 0.03
+
 // time gaps between motor pulse activation/deactivation
 // the higher the delay, the slower the motion
-#define DELAY_0 50
-#define DELAY_1 25
+#define DELAY_0 100
+#define DELAY_1 80
 
 // pit-stop position in cm
 #define X0_PIT 5
@@ -51,16 +57,22 @@
 ////////////////////////////////////////////////////////////////////////////
 // dependencies ////////////////////////////////////////////////////////////
 
-bool b_exec = 1, b_finished = 0;
 
+bool b_read_eff = 0, b_read_done = 0, b_print_eff = 0;
+bool b_exec = 1, b_finished = 0;
 bool b_S0l, b_S0r, b_S1l, b_S1r, b_Sor;
 
-double speed_0_lr;
-double speed_0_rl;
-double speed_1_lr;
-double speed_1_rl;
-
+double speed_0_lr, speed_0_rl, speed_1_lr, speed_1_rl;
 double x0, x1;
+double t_init = 0;
+
+// specific variables for path reading and parsing
+const byte nchars = 1000;
+bool b_newdata = 0;
+byte rchars[nchars];
+float x0_path[100] = {0.0};
+float x1_path[100] = {0.0};
+float waittime_path[100] = {0.0};
 
 // get booleans from stoppers
 // (HIGH = not pressed; LOW = pressed)
@@ -90,18 +102,19 @@ bool get_stoppers(bool & b_S0l, bool & b_S0r, bool & b_S1l, bool & b_S1r, bool b
 // --> returns motion time in s
 double move_step(int iax, int idir, int delh, int dell) {
 
+
       int pdir = iax ? P1_DIR : P0_DIR;
       int pena = iax ? P1_ENA : P0_ENA;
       int ppul = iax ? P1_PUL : P0_PUL;
 
+      double t0 = micros();
       digitalWrite(pdir, idir);
       digitalWrite(pena, HIGH);
       digitalWrite(ppul, HIGH);
-      double t0 = micros();
       delayMicroseconds(delh);
       digitalWrite(ppul, LOW);
-      double t1 = micros();
       delayMicroseconds(dell);
+      double t1 = micros();
 
       return (t1 - t0) * 1e-6;
 
@@ -163,7 +176,7 @@ double calibrate_speed(int iax, int idir) {
 
   double speed = length / time;
 
-  if (B_PRINT) {
+  if (b_print_eff) {
     if (!iax && idir) Serial.print("measured speed along axis 0 (L to R) [cm/s] = ");
     if (!iax && !idir) Serial.print("measured speed along axis 0 (R to L) [cm/s] = ");
     if (iax && idir) Serial.print("measured speed along axis 1 (L to R) [cm/s] = ");
@@ -223,8 +236,7 @@ void test_mode() {
 // move one motor to desired (absolute) position in cm
 void move_to_axis(int iax, double xnew) {
 
-  int delh = iax ? DELAY_1 : DELAY_0;
-  int dell = iax ? DELAY_1 : DELAY_0;
+  int del = iax ? DELAY_1 : DELAY_0;
 
   double x = iax ? x1 : x0;
 
@@ -235,7 +247,7 @@ void move_to_axis(int iax, double xnew) {
   int idir = (speed >= 0) ? 1 : 0;
 
   double timegoal = (xnew - x) / speed;
-  double time=0;
+  double dtime=0, time=0, rtime=0;
 
   bool b_temp=0;
   int i_temp=0;
@@ -254,10 +266,17 @@ void move_to_axis(int iax, double xnew) {
       }
       continue;
     } else {i_temp = 0;}
-    time += move_step(iax, idir, delh, dell);
+    if (rtime > PRINT_PITCH) {
+      print_pos(b_print_eff);
+      rtime=0;
+    }
+    dtime = move_step(iax, idir, del, del);
+    time += dtime;
+    rtime += dtime;
+    if (iax) {x1 += speed*dtime;} else {x0 += speed*dtime;}
   }
 
-  if (iax) {x1 = xnew;} else {x0 = xnew;}
+  //if (iax) {x1 = xnew;} else {x0 = xnew;}
 
 }
 
@@ -267,22 +286,101 @@ void move_to_full(double x0new, double x1new, double waittime) {
   move_to_axis(0, x0new);
   move_to_axis(1, x1new);
 
-  if (B_PRINT) {
-    Serial.print("current positions [cm]: x0 = ");
-    Serial.print(x0);
-    Serial.print(" , x1 = ");
-    Serial.print(x1);
-    Serial.println();
-  }
-
   delay(waittime*1e3);
 
 }
 
 // move to pit-stop position
-void get_to_pit_stop() {
+void get_to_pit_stop() {move_to_full(X0_PIT, X1_PIT, 1);}
 
-  move_to_full(X0_PIT, X1_PIT, 1);
+// print to serial the current (calculated, not measured) position
+void print_pos(bool b_print) {
+  if (!b_print) {return;}
+  else {
+
+    Serial.print(micros() - t_init);
+    Serial.print(", ");
+    Serial.print(x0);
+    Serial.print(", ");
+    Serial.print(x1);
+    Serial.println();
+
+  }
+}
+
+// serial input data reader 
+// edited from https://forum.arduino.cc/t/serial-input-basics-updated/382007/3 (example 5)
+bool serial_rx_read() {
+  static bool b_rx_progress = 0;
+  static byte ichar = 0;
+  byte marker0 = 0x3C;
+  byte marker1 = 0x3E;
+  byte rchar;
+
+  while (true) {
+    rchar = Serial.read();
+
+    Serial.print("read byte = ");
+    Serial.print(rchar);
+    Serial.println();
+
+    if (b_rx_progress) {
+      if (rchar != marker1) { // new nontrivial character (i.e. neither < nor >)
+        rchars[ichar] = rchar;
+        ichar++;
+        if (ichar >= nchars) {ichar = nchars - 1;}
+      } else { // when > is encountered --> stop reading
+        rchars[ichar] = "\0";
+        b_rx_progress = 0;
+        ichar = 0;
+        b_newdata = 1;
+        return true;
+      }
+    }
+
+    else if (rchar == marker0) { // when < is encountered --> start reading
+        b_rx_progress = 1;
+    }
+  }
+}
+
+// serial input data parser 
+// edited from https://forum.arduino.cc/t/serial-input-basics-updated/382007/3 (example 5)
+void serial_rx_parse(int nsteps) {
+
+    char * istrtok;
+
+    for (int istep; istep<=nsteps; istep++) {
+
+      // x0 position for i-th step
+      istrtok = strtok(NULL, ",");
+      x0_path[istep] = atof(istrtok);
+
+      // x1 position for i-th step
+      istrtok = strtok(NULL, ",");
+      x1_path[istep] = atof(istrtok);
+
+      // waiting time for i-th step
+      istrtok = strtok(NULL, ",");
+      waittime_path[istep] = atof(istrtok);
+
+    }
+
+    Serial.print("input scan, first [cm], [cm], [s] = ");
+    Serial.print(x0_path[0]);
+    Serial.print(", ");
+    Serial.print(x1_path[0]);
+    Serial.print(", ");
+    Serial.print(waittime_path[0]);
+    Serial.println();
+
+    Serial.print("input scan, last [cm], [cm], [s] = ");
+    Serial.print(x0_path[nsteps]);
+    Serial.print(", ");
+    Serial.print(x1_path[nsteps]);
+    Serial.print(", ");
+    Serial.print(waittime_path[nsteps]);
+    Serial.println();
 
 }
 
@@ -290,10 +388,7 @@ void get_to_pit_stop() {
 ////////////////////////////////////////////////////////////////////////////
 
 void setup() {
-
-  // serial port for printouts
-  if (B_PRINT) Serial.begin(9600);
-
+    
   // LED on board on
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
@@ -318,6 +413,22 @@ void setup() {
   pinMode(P1_SSIG_L, INPUT_PULLUP);
   pinMode(P1_SSIG_R, INPUT_PULLUP);
 
+  // serial port for printouts
+  if (B_READ||B_PRINT) Serial.begin(9600);
+  b_read_eff =  (Serial.available()) ? B_READ : 0;
+  b_print_eff = (Serial.available()) ? B_PRINT : 0;
+
+  // parse scan path sent by computer via serial
+  // edited from https://forum.arduino.cc/t/serial-input-basics-updated/382007/3 (example 5)
+  int nsteps = 100;
+  if (b_read_eff) {
+    while (!b_read_done) {
+      b_read_done = serial_rx_read();
+      delay(100);
+    }
+    serial_rx_parse(nsteps);
+  }
+
   // move to position (L, L) before calibration procedure
   get_to_zero();
 
@@ -331,10 +442,16 @@ void setup() {
   get_to_zero();
   x0=0;
   x1=0;
+  if (b_print_eff) {
+    Serial.print("current positions - timestamp [us], x0 [cm], x1 [cm] =");
+    Serial.println();
+  }
 
 }
 
 void loop() {
+
+  t_init = micros();
 
   // at the start of each loop, check whether any stopper is pressed
   b_S0l=0, b_S0r=0, b_S1l=0, b_S1r=0;
@@ -348,10 +465,10 @@ void loop() {
 ////////////////////////////////////////////////////////////////////////////
 // main program ////////////////////////////////////////////////////////////
 
-      move_to_full(2, 2, 1);
-      move_to_full(10, 10, 1);
-      move_to_full(30, -5, 1);
-      move_to_full(30, 80, 1);
+      move_to_full(2, 2, 3);
+      move_to_full(10, 10, 3);
+      move_to_full(30, -5, 3);
+      move_to_full(30, 80, 3);
 
 // main program ////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
@@ -360,7 +477,7 @@ void loop() {
 
     } else {
 
-      if (b_finished) {
+      if (!b_finished) {
         get_to_pit_stop();
         b_finished = 1;
       } else {delay(1000);}
