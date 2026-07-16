@@ -1,0 +1,8 @@
+data/*
+!.keep
+
+data_loc/*
+!.keep
+
+eos_temp/*
+!.keep
