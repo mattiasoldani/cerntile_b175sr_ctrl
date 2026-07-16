@@ -1,5 +1,4 @@
 import datetime
-import os
 import serial
 import sys
 from time import sleep
@@ -27,7 +26,9 @@ print("---\n\n---")
 
 # connecting to system
 print("trying to connect port %s..." % port)
-ser = serial.Serial(port, baudrate=9600, stopbits=1)
+ser = serial.Serial(port, baudrate=9600, stopbits=1, timeout=1)
+sleep(2)
+ser.reset_input_buffer()
 print("done!")
 
 print("---\n\n---")
@@ -35,6 +36,7 @@ print("---\n\n---")
 # sending string to system via serial
 print("sending in scan program now...")
 ser.write(fullstr.encode())
+ser.flush()
 print("done!")
 
 print("---\n\n---")

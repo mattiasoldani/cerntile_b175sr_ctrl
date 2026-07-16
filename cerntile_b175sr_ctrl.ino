@@ -69,10 +69,12 @@ double t_init = 0;
 // specific variables for path reading and parsing
 const byte nchars = 1000;
 bool b_newdata = 0;
-byte rchars[nchars];
-float x0_path[100] = {0.0};
-float x1_path[100] = {0.0};
-float waittime_path[100] = {0.0};
+char rchars[nchars];
+const int max_path_points = 100;
+int n_path_points = 0;
+float x0_path[max_path_points] = {0.0};
+float x1_path[max_path_points] = {0.0};
+float waittime_path[max_path_points] = {0.0};
 
 // get booleans from stoppers
 // (HIGH = not pressed; LOW = pressed)
@@ -313,16 +315,12 @@ void print_pos(bool b_print) {
 bool serial_rx_read() {
   static bool b_rx_progress = 0;
   static byte ichar = 0;
-  byte marker0 = 0x3C;
-  byte marker1 = 0x3E;
-  byte rchar;
+  const char marker0 = '<';
+  const char marker1 = '>';
+  char rchar;
 
-  while (true) {
+  while (Serial.available() > 0) {
     rchar = Serial.read();
-
-    Serial.print("read byte = ");
-    Serial.print(rchar);
-    Serial.println();
 
     if (b_rx_progress) {
       if (rchar != marker1) { // new nontrivial character (i.e. neither < nor >)
@@ -330,7 +328,7 @@ bool serial_rx_read() {
         ichar++;
         if (ichar >= nchars) {ichar = nchars - 1;}
       } else { // when > is encountered --> stop reading
-        rchars[ichar] = "\0";
+        rchars[ichar] = '\0';
         b_rx_progress = 0;
         ichar = 0;
         b_newdata = 1;
@@ -340,47 +338,66 @@ bool serial_rx_read() {
 
     else if (rchar == marker0) { // when < is encountered --> start reading
         b_rx_progress = 1;
+        ichar = 0;
     }
   }
+
+  return false;
 }
 
 // serial input data parser 
 // edited from https://forum.arduino.cc/t/serial-input-basics-updated/382007/3 (example 5)
-void serial_rx_parse(int nsteps) {
+int serial_rx_parse() {
 
-    char * istrtok;
+    char * istrtok = strtok(rchars, ",");
+    n_path_points = 0;
 
-    for (int istep; istep<=nsteps; istep++) {
+    while (istrtok != NULL && n_path_points < max_path_points) {
 
       // x0 position for i-th step
-      istrtok = strtok(NULL, ",");
-      x0_path[istep] = atof(istrtok);
+      x0_path[n_path_points] = atof(istrtok);
 
       // x1 position for i-th step
       istrtok = strtok(NULL, ",");
-      x1_path[istep] = atof(istrtok);
+      if (istrtok == NULL) {break;}
+      x1_path[n_path_points] = atof(istrtok);
 
       // waiting time for i-th step
       istrtok = strtok(NULL, ",");
-      waittime_path[istep] = atof(istrtok);
+      if (istrtok == NULL) {break;}
+      waittime_path[n_path_points] = atof(istrtok);
+
+      n_path_points++;
+      istrtok = strtok(NULL, ",");
 
     }
 
-    Serial.print("input scan, first [cm], [cm], [s] = ");
-    Serial.print(x0_path[0]);
-    Serial.print(", ");
-    Serial.print(x1_path[0]);
-    Serial.print(", ");
-    Serial.print(waittime_path[0]);
-    Serial.println();
+    if (b_print_eff) {
+      Serial.print("input scan points = ");
+      Serial.print(n_path_points);
+      Serial.println();
 
-    Serial.print("input scan, last [cm], [cm], [s] = ");
-    Serial.print(x0_path[nsteps]);
-    Serial.print(", ");
-    Serial.print(x1_path[nsteps]);
-    Serial.print(", ");
-    Serial.print(waittime_path[nsteps]);
-    Serial.println();
+      if (n_path_points > 0) {
+        Serial.print("input scan, first [cm], [cm], [s] = ");
+        Serial.print(x0_path[0]);
+        Serial.print(", ");
+        Serial.print(x1_path[0]);
+        Serial.print(", ");
+        Serial.print(waittime_path[0]);
+        Serial.println();
+
+        int ilast = n_path_points - 1;
+        Serial.print("input scan, last [cm], [cm], [s] = ");
+        Serial.print(x0_path[ilast]);
+        Serial.print(", ");
+        Serial.print(x1_path[ilast]);
+        Serial.print(", ");
+        Serial.print(waittime_path[ilast]);
+        Serial.println();
+      }
+    }
+
+    return n_path_points;
 
 }
 
@@ -415,18 +432,21 @@ void setup() {
 
   // serial port for printouts
   if (B_READ||B_PRINT) Serial.begin(9600);
-  b_read_eff =  (Serial.available()) ? B_READ : 0;
-  b_print_eff = (Serial.available()) ? B_PRINT : 0;
+  b_read_eff = B_READ;
+  b_print_eff = B_PRINT;
 
   // parse scan path sent by computer via serial
   // edited from https://forum.arduino.cc/t/serial-input-basics-updated/382007/3 (example 5)
-  int nsteps = 100;
   if (b_read_eff) {
+    if (b_print_eff) {
+      Serial.print("waiting for input scan framed as <x0,y0,t0,...>");
+      Serial.println();
+    }
     while (!b_read_done) {
       b_read_done = serial_rx_read();
-      delay(100);
+      delay(1);
     }
-    serial_rx_parse(nsteps);
+    serial_rx_parse();
   }
 
   // move to position (L, L) before calibration procedure
@@ -465,10 +485,16 @@ void loop() {
 ////////////////////////////////////////////////////////////////////////////
 // main program ////////////////////////////////////////////////////////////
 
-      move_to_full(2, 2, 3);
-      move_to_full(10, 10, 3);
-      move_to_full(30, -5, 3);
-      move_to_full(30, 80, 3);
+      if (n_path_points > 0) {
+        for (int ipath = 0; ipath < n_path_points; ipath++) {
+          move_to_full(x0_path[ipath], x1_path[ipath], waittime_path[ipath]);
+        }
+      } else {
+        move_to_full(2, 2, 3);
+        move_to_full(10, 10, 3);
+        move_to_full(30, -5, 3);
+        move_to_full(30, 80, 3);
+      }
 
 // main program ////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////

@@ -1,2 +1,7 @@
-serial/data/*
+serial/data/input/*
+!.keep
+
+serial/data/output/*
+!.keep
+
 serial/*_pyenv
