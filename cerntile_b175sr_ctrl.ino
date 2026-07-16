@@ -24,15 +24,19 @@
 #define L1 74
 
 // stopper-to-LED boolean: pushing any stopper turns off the built-in LED
-#define B_SLED false
+#define B_SLED 0
 
 // printout boolean: if true, some info are printed through the serial output
 #define B_PRINT 1
 
 // time gaps between motor pulse activation/deactivation
 // the higher the delay, the slower the motion
-#define DELAY_0 1000
-#define DELAY_1 500
+#define DELAY_0 50
+#define DELAY_1 25
+
+// pit-stop position in cm
+#define X0_PIT 5
+#define X1_PIT 63
 
 // test program parameters
 // - motors work one at a time, toward one direction at a time, overall tracing a rectangle
@@ -47,6 +51,8 @@
 ////////////////////////////////////////////////////////////////////////////
 // dependencies ////////////////////////////////////////////////////////////
 
+bool b_exec = 1, b_finished = 0;
+
 bool b_S0l, b_S0r, b_S1l, b_S1r, b_Sor;
 
 double speed_0_lr;
@@ -59,7 +65,7 @@ double x0, x1;
 // get booleans from stoppers
 // (HIGH = not pressed; LOW = pressed)
 // --> returns boolean representing the OR between all stoppers
-bool get_stoppers(bool & b_S0l, bool & b_S0r, bool & b_S1l, bool & b_S1r, bool b_led = false) {
+bool get_stoppers(bool & b_S0l, bool & b_S0r, bool & b_S1l, bool & b_S1r, bool b_led = 0) {
 
   b_S0l = digitalRead(P0_SSIG_L) == LOW;
   b_S0r = digitalRead(P0_SSIG_R) == LOW;
@@ -273,6 +279,13 @@ void move_to_full(double x0new, double x1new, double waittime) {
 
 }
 
+// move to pit-stop position
+void get_to_pit_stop() {
+
+  move_to_full(X0_PIT, X1_PIT, 1);
+
+}
+
 // dependencies ////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 
@@ -330,15 +343,29 @@ void loop() {
   if (B_TEST) {test_mode();} else 
   {
 
+    if (b_exec) {
+
 ////////////////////////////////////////////////////////////////////////////
 // main program ////////////////////////////////////////////////////////////
 
-    move_to_full(2, 2, 1);
-    move_to_full(10, 10, 1);
-    move_to_full(30, -5, 1);
+      move_to_full(2, 2, 1);
+      move_to_full(10, 10, 1);
+      move_to_full(30, -5, 1);
+      move_to_full(30, 80, 1);
 
 // main program ////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
+
+      b_exec = 0;
+
+    } else {
+
+      if (b_finished) {
+        get_to_pit_stop();
+        b_finished = 1;
+      } else {delay(1000);}
+      
+    }
 
   }
 
