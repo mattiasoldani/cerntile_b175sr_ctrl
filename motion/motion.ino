@@ -314,7 +314,7 @@ void print_pos(bool b_print) {
 // edited from https://forum.arduino.cc/t/serial-input-basics-updated/382007/3 (example 5)
 bool serial_rx_read() {
   static bool b_rx_progress = 0;
-  static byte ichar = 0;
+  static unsigned int ichar = 0;
   const char marker0 = '<';
   const char marker1 = '>';
   char rchar;
