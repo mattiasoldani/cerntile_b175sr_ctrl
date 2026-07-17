@@ -33,7 +33,7 @@
 #define B_PRINT 1
 
 // printout pitch: the higher this number, the lower the printout frequency
-#define PRINT_PITCH 0.03
+#define PRINT_PITCH 0.1
 
 // time gaps between motor pulse activation/deactivation
 // the higher the delay, the slower the motion
@@ -179,10 +179,10 @@ double calibrate_speed(int iax, int idir) {
   double speed = length / time;
 
   if (b_print_eff) {
-    if (!iax && idir) Serial.print("measured speed along axis 0 (L to R) [cm/s] = ");
-    if (!iax && !idir) Serial.print("measured speed along axis 0 (R to L) [cm/s] = ");
-    if (iax && idir) Serial.print("measured speed along axis 1 (L to R) [cm/s] = ");
-    if (iax && !idir) Serial.print("measured speed along axis 1 (R to L) [cm/s] = ");
+    if (!iax && idir) Serial.print("output: measured speed along axis 0 (L to R) [cm/s] = ");
+    if (!iax && !idir) Serial.print("output: measured speed along axis 0 (R to L) [cm/s] = ");
+    if (iax && idir) Serial.print("output: measured speed along axis 1 (L to R) [cm/s] = ");
+    if (iax && !idir) Serial.print("output: measured speed along axis 1 (R to L) [cm/s] = ");
     Serial.print(speed);
     Serial.println();
   }
@@ -373,12 +373,12 @@ int serial_rx_parse() {
     }
 
     if (b_print_eff) {
-      Serial.print("input scan points = ");
+      Serial.print("input: nr. of scan points = ");
       Serial.print(n_path_points);
       Serial.println();
 
       if (n_path_points > 0) {
-        Serial.print("input scan, first [cm], [cm], [s] = ");
+        Serial.print("input: scan first point [cm], [cm], [s] = ");
         Serial.print(x0_path[0]);
         Serial.print(", ");
         Serial.print(x1_path[0]);
@@ -387,7 +387,7 @@ int serial_rx_parse() {
         Serial.println();
 
         int ilast = n_path_points - 1;
-        Serial.print("input scan, last [cm], [cm], [s] = ");
+        Serial.print("input: scan last point [cm], [cm], [s] = ");
         Serial.print(x0_path[ilast]);
         Serial.print(", ");
         Serial.print(x1_path[ilast]);
@@ -438,10 +438,6 @@ void setup() {
   // parse scan path sent by computer via serial
   // edited from https://forum.arduino.cc/t/serial-input-basics-updated/382007/3 (example 5)
   if (b_read_eff) {
-    if (b_print_eff) {
-      Serial.print("waiting for input scan framed as <x0,y0,t0,...>");
-      Serial.println();
-    }
     while (!b_read_done) {
       b_read_done = serial_rx_read();
       delay(1);
