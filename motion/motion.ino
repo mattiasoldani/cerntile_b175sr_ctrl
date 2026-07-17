@@ -67,14 +67,13 @@ double x0, x1;
 double t_init = 0;
 
 // specific variables for path reading and parsing
-const unsigned int nchars = 1000;
-bool b_newdata = 0;
-char rchars[nchars];
-const int max_path_points = 100;
+const int max_path_points = 180;
+const byte max_token_chars = 24;
 int n_path_points = 0;
 float x0_path[max_path_points] = {0.0};
 float x1_path[max_path_points] = {0.0};
 float waittime_path[max_path_points] = {0.0};
+bool b_path_overflow = 0, b_token_overflow = 0, b_incomplete_path = 0;
 
 // get booleans from stoppers
 // (HIGH = not pressed; LOW = pressed)
@@ -310,11 +309,85 @@ void print_pos(bool b_print) {
   }
 }
 
-// serial input data reader 
-// edited from https://forum.arduino.cc/t/serial-input-basics-updated/382007/3 (example 5)
+void serial_rx_store_value(float value, byte & ifield) {
+
+  if (n_path_points >= max_path_points) {
+    b_path_overflow = 1;
+    ifield = (ifield + 1) % 3;
+    return;
+  }
+
+  if (ifield == 0) {x0_path[n_path_points] = value;}
+  else if (ifield == 1) {x1_path[n_path_points] = value;}
+  else {
+    waittime_path[n_path_points] = value;
+    n_path_points++;
+  }
+
+  ifield = (ifield + 1) % 3;
+
+}
+
+void serial_rx_finish_token(char token[], byte & itoken, byte & ifield) {
+
+  if (itoken == 0) {return;}
+
+  token[itoken] = '\0';
+  serial_rx_store_value(atof(token), ifield);
+  itoken = 0;
+
+}
+
+void serial_rx_print_summary() {
+
+  if (!b_print_eff) {return;}
+
+  Serial.print("input: nr. of scan points = ");
+  Serial.print(n_path_points);
+  Serial.println();
+
+  if (b_path_overflow) {
+    Serial.print("input: WARNING, scan truncated at max_path_points = ");
+    Serial.print(max_path_points);
+    Serial.println();
+  }
+  if (b_token_overflow) {
+    Serial.print("input: WARNING, at least one numeric token was too long");
+    Serial.println();
+  }
+  if (b_incomplete_path) {
+    Serial.print("input: WARNING, ignored incomplete final scan point");
+    Serial.println();
+  }
+
+  if (n_path_points > 0) {
+    Serial.print("input: scan first point [cm], [cm], [s] = ");
+    Serial.print(x0_path[0]);
+    Serial.print(", ");
+    Serial.print(x1_path[0]);
+    Serial.print(", ");
+    Serial.print(waittime_path[0]);
+    Serial.println();
+
+    int ilast = n_path_points - 1;
+    Serial.print("input: scan last point [cm], [cm], [s] = ");
+    Serial.print(x0_path[ilast]);
+    Serial.print(", ");
+    Serial.print(x1_path[ilast]);
+    Serial.print(", ");
+    Serial.print(waittime_path[ilast]);
+    Serial.println();
+  }
+
+}
+
+// serial input data reader and direct stream parser
 bool serial_rx_read() {
+
   static bool b_rx_progress = 0;
-  static unsigned int ichar = 0;
+  static char token[max_token_chars];
+  static byte itoken = 0;
+  static byte ifield = 0;
   const char marker0 = '<';
   const char marker1 = '>';
   char rchar;
@@ -322,83 +395,42 @@ bool serial_rx_read() {
   while (Serial.available() > 0) {
     rchar = Serial.read();
 
-    if (b_rx_progress) {
-      if (rchar != marker1) { // new nontrivial character (i.e. neither < nor >)
-        rchars[ichar] = rchar;
-        ichar++;
-        if (ichar >= nchars) {ichar = nchars - 1;}
-      } else { // when > is encountered --> stop reading
-        rchars[ichar] = '\0';
-        b_rx_progress = 0;
-        ichar = 0;
-        b_newdata = 1;
-        return true;
-      }
+    if (rchar == marker0) {
+      b_rx_progress = 1;
+      n_path_points = 0;
+      itoken = 0;
+      ifield = 0;
+      b_path_overflow = 0;
+      b_token_overflow = 0;
+      b_incomplete_path = 0;
+      continue;
     }
 
-    else if (rchar == marker0) { // when < is encountered --> start reading
-        b_rx_progress = 1;
-        ichar = 0;
+    if (!b_rx_progress) {continue;}
+
+    if (rchar == ',' || rchar == marker1) {
+      serial_rx_finish_token(token, itoken, ifield);
+
+      if (rchar == marker1) {
+        b_rx_progress = 0;
+        b_incomplete_path = (ifield != 0);
+        serial_rx_print_summary();
+        return true;
+      }
+      continue;
+    }
+
+    if (rchar == ' ' || rchar == '\n' || rchar == '\r' || rchar == '\t') {continue;}
+
+    if (itoken < max_token_chars - 1) {
+      token[itoken] = rchar;
+      itoken++;
+    } else {
+      b_token_overflow = 1;
     }
   }
 
   return false;
-}
-
-// serial input data parser 
-// edited from https://forum.arduino.cc/t/serial-input-basics-updated/382007/3 (example 5)
-int serial_rx_parse() {
-
-    char * istrtok = strtok(rchars, ",");
-    n_path_points = 0;
-
-    while (istrtok != NULL && n_path_points < max_path_points) {
-
-      // x0 position for i-th step
-      x0_path[n_path_points] = atof(istrtok);
-
-      // x1 position for i-th step
-      istrtok = strtok(NULL, ",");
-      if (istrtok == NULL) {break;}
-      x1_path[n_path_points] = atof(istrtok);
-
-      // waiting time for i-th step
-      istrtok = strtok(NULL, ",");
-      if (istrtok == NULL) {break;}
-      waittime_path[n_path_points] = atof(istrtok);
-
-      n_path_points++;
-      istrtok = strtok(NULL, ",");
-
-    }
-
-    if (b_print_eff) {
-      Serial.print("input: nr. of scan points = ");
-      Serial.print(n_path_points);
-      Serial.println();
-
-      if (n_path_points > 0) {
-        Serial.print("input: scan first point [cm], [cm], [s] = ");
-        Serial.print(x0_path[0]);
-        Serial.print(", ");
-        Serial.print(x1_path[0]);
-        Serial.print(", ");
-        Serial.print(waittime_path[0]);
-        Serial.println();
-
-        int ilast = n_path_points - 1;
-        Serial.print("input: scan last point [cm], [cm], [s] = ");
-        Serial.print(x0_path[ilast]);
-        Serial.print(", ");
-        Serial.print(x1_path[ilast]);
-        Serial.print(", ");
-        Serial.print(waittime_path[ilast]);
-        Serial.println();
-      }
-    }
-
-    return n_path_points;
-
 }
 
 // dependencies ////////////////////////////////////////////////////////////
@@ -442,7 +474,6 @@ void setup() {
       b_read_done = serial_rx_read();
       delay(1);
     }
-    serial_rx_parse();
   }
 
   // move to position (L, L) before calibration procedure
