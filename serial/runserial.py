@@ -58,18 +58,21 @@ while True:
             print("---\n\nvvv starting now... vvv")
             outfile = open(filenamefull_loc, "w")
 
-        # current reading
-        ser.write(b':READ?\n')
-        read = str(ser.readline().decode()).replace("\n","").replace("\r","")
-        if (len(read)==0): continue;
-        
-        # score output and wait until next iteration
-        outstr = "[%d] %s" % (epoch, read)
-        print(outstr)
-        outfile.write(outstr)
-        outfile.flush()
+        # current readings
+        reads = [ser.readline()]
+        while ser.in_waiting:
+            reads.append(ser.readline())
 
-        iloop += 1
+        for read0 in reads:
+            read = str(read0.decode()).replace("\n","").replace("\r","")
+            if (len(read)==0): continue;
+
+            # score output
+            outstr = "[%d] %s" % (epoch, read)
+            print(outstr)
+            outfile.write(outstr+"\n")
+            outfile.flush()
+            iloop += 1
         sleep(dt)
 
     except KeyboardInterrupt:

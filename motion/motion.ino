@@ -67,7 +67,7 @@ double x0, x1;
 double t_init = 0;
 
 // specific variables for path reading and parsing
-const byte nchars = 1000;
+const unsigned int nchars = 1000;
 bool b_newdata = 0;
 char rchars[nchars];
 const int max_path_points = 100;
