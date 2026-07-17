@@ -4,21 +4,20 @@ import sys
 from time import sleep
 
 port = "/dev/ttyACM0"
-dt = 1
-t0 = datetime.datetime(1970, 1, 1)
-filepath_loc = "./data/"
-filesize = int(36000 / dt)
 inpath = "./data/input/"
-infile = "path_default.txt"
+infilename = "path_default.txt"
+outpath = "./data/output/"
+dt = 0.2
+t0 = datetime.datetime(1970, 1, 1)
 
 print("---")
 
 # reading input file with scan coordinates --> prepare string for serial
 print("will send in the scan program:")
 fullstr = "<"
-with open(inpath+infile, "r") as f:
+with open(inpath+infilename, "r") as f:
     for line in f:
-        fullstr += str(line)
+        fullstr += str(line) + ","
 fullstr = fullstr.replace("\n","") + ">"
 print(fullstr.encode())
 
@@ -52,31 +51,29 @@ while True:
         t = datetime.datetime.now() - t0
         epoch = int(t.total_seconds())
 
-        if iloop%filesize == 0:
-            print("\nnext iteration (%d):" % iloop)
-
-            # open output file(s)
-            filenamefull_loc = filepath_loc + "%d.txt"%epoch
+        # open output file at start 
+        if iloop == 0:
+            filenamefull_loc = outpath+"%d.txt"%epoch
             print("all data will be written locally in %s" % filenamefull_loc)
-            outfile_loc = open(filenamefull_loc, "w")
+            print("---\n\nvvv starting now... vvv")
+            outfile = open(filenamefull_loc, "w")
 
         # current reading
-        ser.write(b':READ?\n') ; read0 = ser.readline()
-        #read = float(read0)
-        read = read0
-
+        ser.write(b':READ?\n')
+        read = str(ser.readline().decode()).replace("\n","").replace("\r","")
+        if (len(read)==0): continue;
+        
         # score output and wait until next iteration
-        outstr = "%d,%s" % (epoch, read)
+        outstr = "[%d] %s" % (epoch, read)
         print(outstr)
-        outfile_loc.write(outstr+"\n")
-        outfile_loc.flush()
-
-        if (iloop+1)%filesize == 0:
-            outfile_loc.close()
+        outfile.write(outstr)
+        outfile.flush()
 
         iloop += 1
         sleep(dt)
 
     except KeyboardInterrupt:
-        print("\nCTRL+C --> Exiting...")
+        print("\n^^^^^^^^^^^^^^^^^^^^^^^")
+        print("CTRL+C --> closing file, exiting...")
+        outfile.close()
         sys.exit()
