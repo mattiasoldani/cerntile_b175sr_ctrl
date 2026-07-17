@@ -67,7 +67,9 @@ double x0, x1;
 double t_init = 0;
 
 // specific variables for path reading and parsing
-const int max_path_points = 180;
+// started from https://forum.arduino.cc/t/serial-input-basics-updated/382007/3 (example 5)
+// then improved with OpenAI Codex (GPT-5.5)
+const int max_path_points = 256;
 const byte max_token_chars = 24;
 int n_path_points = 0;
 float x0_path[max_path_points] = {0.0};
@@ -309,79 +311,9 @@ void print_pos(bool b_print) {
   }
 }
 
-void serial_rx_store_value(float value, byte & ifield) {
-
-  if (n_path_points >= max_path_points) {
-    b_path_overflow = 1;
-    ifield = (ifield + 1) % 3;
-    return;
-  }
-
-  if (ifield == 0) {x0_path[n_path_points] = value;}
-  else if (ifield == 1) {x1_path[n_path_points] = value;}
-  else {
-    waittime_path[n_path_points] = value;
-    n_path_points++;
-  }
-
-  ifield = (ifield + 1) % 3;
-
-}
-
-void serial_rx_finish_token(char token[], byte & itoken, byte & ifield) {
-
-  if (itoken == 0) {return;}
-
-  token[itoken] = '\0';
-  serial_rx_store_value(atof(token), ifield);
-  itoken = 0;
-
-}
-
-void serial_rx_print_summary() {
-
-  if (!b_print_eff) {return;}
-
-  Serial.print("input: nr. of scan points = ");
-  Serial.print(n_path_points);
-  Serial.println();
-
-  if (b_path_overflow) {
-    Serial.print("input: WARNING, scan truncated at max_path_points = ");
-    Serial.print(max_path_points);
-    Serial.println();
-  }
-  if (b_token_overflow) {
-    Serial.print("input: WARNING, at least one numeric token was too long");
-    Serial.println();
-  }
-  if (b_incomplete_path) {
-    Serial.print("input: WARNING, ignored incomplete final scan point");
-    Serial.println();
-  }
-
-  if (n_path_points > 0) {
-    Serial.print("input: scan first point [cm], [cm], [s] = ");
-    Serial.print(x0_path[0]);
-    Serial.print(", ");
-    Serial.print(x1_path[0]);
-    Serial.print(", ");
-    Serial.print(waittime_path[0]);
-    Serial.println();
-
-    int ilast = n_path_points - 1;
-    Serial.print("input: scan last point [cm], [cm], [s] = ");
-    Serial.print(x0_path[ilast]);
-    Serial.print(", ");
-    Serial.print(x1_path[ilast]);
-    Serial.print(", ");
-    Serial.print(waittime_path[ilast]);
-    Serial.println();
-  }
-
-}
-
 // serial input data reader and direct stream parser
+// started from https://forum.arduino.cc/t/serial-input-basics-updated/382007/3 (example 5)
+// then improved with OpenAI Codex (GPT-5.5)
 bool serial_rx_read() {
 
   static bool b_rx_progress = 0;
@@ -433,6 +365,81 @@ bool serial_rx_read() {
   return false;
 }
 
+// for serial input data reading, added by OpenAI Codex (GPT-5.5)
+void serial_rx_store_value(float value, byte & ifield) {
+
+  if (n_path_points >= max_path_points) {
+    b_path_overflow = 1;
+    ifield = (ifield + 1) % 3;
+    return;
+  }
+
+  if (ifield == 0) {x0_path[n_path_points] = value;}
+  else if (ifield == 1) {x1_path[n_path_points] = value;}
+  else {
+    waittime_path[n_path_points] = value;
+    n_path_points++;
+  }
+
+  ifield = (ifield + 1) % 3;
+
+}
+
+// for serial input data reading, added by OpenAI Codex (GPT-5.5)
+void serial_rx_finish_token(char token[], byte & itoken, byte & ifield) {
+
+  if (itoken == 0) {return;}
+
+  token[itoken] = '\0';
+  serial_rx_store_value(atof(token), ifield);
+  itoken = 0;
+
+}
+
+// for serial input data reading, added by OpenAI Codex (GPT-5.5)
+void serial_rx_print_summary() {
+
+  if (!b_print_eff) {return;}
+
+  Serial.print("input: nr. of scan points = ");
+  Serial.print(n_path_points);
+  Serial.println();
+
+  if (b_path_overflow) {
+    Serial.print("input: WARNING, scan truncated at max_path_points = ");
+    Serial.print(max_path_points);
+    Serial.println();
+  }
+  if (b_token_overflow) {
+    Serial.print("input: WARNING, at least one numeric token was too long");
+    Serial.println();
+  }
+  if (b_incomplete_path) {
+    Serial.print("input: WARNING, ignored incomplete final scan point");
+    Serial.println();
+  }
+
+  if (n_path_points > 0) {
+    Serial.print("input: scan first point [cm], [cm], [s] = ");
+    Serial.print(x0_path[0]);
+    Serial.print(", ");
+    Serial.print(x1_path[0]);
+    Serial.print(", ");
+    Serial.print(waittime_path[0]);
+    Serial.println();
+
+    int ilast = n_path_points - 1;
+    Serial.print("input: scan last point [cm], [cm], [s] = ");
+    Serial.print(x0_path[ilast]);
+    Serial.print(", ");
+    Serial.print(x1_path[ilast]);
+    Serial.print(", ");
+    Serial.print(waittime_path[ilast]);
+    Serial.println();
+  }
+
+}
+
 // dependencies ////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 
@@ -468,7 +475,8 @@ void setup() {
   b_print_eff = B_PRINT;
 
   // parse scan path sent by computer via serial
-  // edited from https://forum.arduino.cc/t/serial-input-basics-updated/382007/3 (example 5)
+  // started from https://forum.arduino.cc/t/serial-input-basics-updated/382007/3 (example 5)
+  // then improved with OpenAI Codex (GPT-5.5)  
   if (b_read_eff) {
     while (!b_read_done) {
       b_read_done = serial_rx_read();
@@ -509,22 +517,9 @@ void loop() {
 
     if (b_exec) {
 
-////////////////////////////////////////////////////////////////////////////
-// main program ////////////////////////////////////////////////////////////
-
-      if (n_path_points > 0) {
-        for (int ipath = 0; ipath < n_path_points; ipath++) {
-          move_to_full(x0_path[ipath], x1_path[ipath], waittime_path[ipath]);
-        }
-      } else {
-        move_to_full(2, 2, 3);
-        move_to_full(10, 10, 3);
-        move_to_full(30, -5, 3);
-        move_to_full(30, 80, 3);
+      for (int ipath = 0; ipath < n_path_points; ipath++) {
+        move_to_full(x0_path[ipath], x1_path[ipath], waittime_path[ipath]);
       }
-
-// main program ////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////
 
       b_exec = 0;
 
