@@ -10,6 +10,13 @@ outpath = "./data/output/"
 dt = 0.2
 t0 = datetime.datetime(1970, 1, 1)
 
+# input arguments - only the name of the scan path file, which must be in the folder specified above by inpath
+if len(sys.argv) > 2:
+    print("usage: python runserial.py [infilename]")
+    sys.exit(1)
+elif len(sys.argv) == 2:
+    infilename = sys.argv[1]
+
 print("---")
 
 # reading input file with scan coordinates --> prepare string for serial

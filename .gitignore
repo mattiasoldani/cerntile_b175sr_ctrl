@@ -2,3 +2,5 @@ serial/data/output/*
 !serial/data/output/.keep
 
 serial/*_pyenv
+
+*_pycache_*
