@@ -50,6 +50,9 @@
 // output trigger boolean: if true, turns on output trigger signal (for DAQ) during the waiting time after each movement
 #define B_OUTTRG 1
 
+// continuous DAQ boolean: if true, keep acquiring data even while the motors are moving
+#define B_CONTDAQ 0
+
 // test program parameters
 // - motors work one at a time, toward one direction at a time, overall tracing a rectangle
 // - path length (in number of steps) of each motor can be tuned: TEST_NSTEPS_0/1
@@ -64,7 +67,7 @@
 // dependencies ////////////////////////////////////////////////////////////
 
 
-bool b_read_eff = 0, b_read_done = 0, b_print_eff = 0;
+bool b_read_done = 0;
 bool b_exec = 1, b_finished = 0;
 bool b_S0l, b_S0r, b_S1l, b_S1r, b_Sor;
 
@@ -185,7 +188,7 @@ double calibrate_speed(int iax, int idir) {
 
   double speed = length / time;
 
-  if (b_print_eff) {
+  if (B_PRINT) {
     if (!iax && idir) Serial.print("output: measured speed along axis 0 (L to R) [cm/s] = ");
     if (!iax && !idir) Serial.print("output: measured speed along axis 0 (R to L) [cm/s] = ");
     if (iax && idir) Serial.print("output: measured speed along axis 1 (L to R) [cm/s] = ");
@@ -195,7 +198,6 @@ double calibrate_speed(int iax, int idir) {
   }
 
   return speed;
-
 }
 
 // test mode
@@ -276,7 +278,7 @@ void move_to_axis(int iax, double xnew) {
       continue;
     } else {i_temp = 0;}
     if (rtime > PRINT_PITCH) {
-      print_pos(b_print_eff);
+      print_pos(B_PRINT);
       rtime=0;
     }
     dtime = move_step(iax, idir, del, del);
@@ -290,19 +292,19 @@ void move_to_axis(int iax, double xnew) {
 }
 
 // move to a new 2D (absolute) position (in cm) and wait a set amount of time (in s)
-void move_to_full(double x0new, double x1new, double waittime) {
+void move_to_full(double x0new, double x1new, double waittime, bool b_outtrg_single=false) {
 
   move_to_axis(0, x0new);
   move_to_axis(1, x1new);
 
-  if (B_OUTTRG) digitalWrite(P_OUTTRG, HIGH);
+  if (b_outtrg_single) digitalWrite(P_OUTTRG, HIGH);
   delay(waittime*1e3);
-  if (B_OUTTRG) digitalWrite(P_OUTTRG, LOW);
+  if (b_outtrg_single) digitalWrite(P_OUTTRG, LOW);
 
 }
 
 // move to pit-stop position
-void get_to_pit_stop() {move_to_full(X0_PIT, X1_PIT, 1);}
+void get_to_pit_stop() {move_to_full(X0_PIT, X1_PIT, 1, false);}
 
 // print to serial the current (calculated, not measured) position
 void print_pos(bool b_print) {
@@ -407,7 +409,7 @@ void serial_rx_finish_token(char token[], byte & itoken, byte & ifield) {
 // for serial input data reading, added by OpenAI Codex (GPT-5.5)
 void serial_rx_print_summary() {
 
-  if (!b_print_eff) {return;}
+  if (!B_PRINT) {return;}
 
   Serial.print("input: nr. of scan points = ");
   Serial.print(n_path_points);
@@ -483,13 +485,12 @@ void setup() {
 
   // serial port for printouts
   if (B_READ||B_PRINT) Serial.begin(9600);
-  b_read_eff = B_READ;
-  b_print_eff = B_PRINT;
+
 
   // parse scan path sent by computer via serial
   // started from https://forum.arduino.cc/t/serial-input-basics-updated/382007/3 (example 5)
   // then improved with OpenAI Codex (GPT-5.5)  
-  if (b_read_eff) {
+  if (B_READ) {
     while (!b_read_done) {
       b_read_done = serial_rx_read();
       delay(1);
@@ -509,7 +510,7 @@ void setup() {
   get_to_zero();
   x0=0;
   x1=0;
-  if (b_print_eff) {
+  if (B_PRINT) {
     Serial.print("current positions - timestamp [us], x0 [cm], x1 [cm] =");
     Serial.println();
   }
@@ -529,9 +530,13 @@ void loop() {
 
     if (b_exec) {
 
+      if (B_CONTDAQ) digitalWrite(P_OUTTRG, HIGH);
+
       for (int ipath = 0; ipath < n_path_points; ipath++) {
-        move_to_full(x0_path[ipath], x1_path[ipath], waittime_path[ipath]);
+        move_to_full(x0_path[ipath], x1_path[ipath], waittime_path[ipath], B_OUTTRG && !B_CONTDAQ);
       }
+
+      if (B_CONTDAQ) digitalWrite(P_OUTTRG, LOW);
 
       b_exec = 0;
 
