@@ -16,21 +16,15 @@
 #define P1_SSIG_L 10
 #define P1_SSIG_R 11
 
+// output trigger signal for DAQ
+#define P_OUTTRG 13
+
 // number of loops (with no movement) with pressed stopper before breaking loop, for bounce suppression
 #define N_LOOP_CHECK 10
 
 // physical length of the two axes
 #define L0 26
 #define L1 74
-
-// stopper-to-LED boolean: pushing any stopper turns off the built-in LED
-#define B_SLED 0
-
-// input path boolean: if true, list of scan coordinates is read out via serial
-#define B_READ 1
-
-// printout boolean: if true, some info are printed through the serial output
-#define B_PRINT 1
 
 // printout pitch: the higher this number, the lower the printout frequency
 #define PRINT_PITCH 0.1
@@ -43,6 +37,18 @@
 // pit-stop position in cm
 #define X0_PIT 5
 #define X1_PIT 63
+
+// stopper-to-LED boolean: pushing any stopper turns off the built-in LED
+#define B_SLED 0
+
+// input path boolean: if true, list of scan coordinates is read out via serial
+#define B_READ 1
+
+// printout boolean: if true, some info are printed through the serial output
+#define B_PRINT 1
+
+// output trigger boolean: if true, turns on output trigger signal (for DAQ) during the waiting time after each movement
+#define B_OUTTRG 1
 
 // test program parameters
 // - motors work one at a time, toward one direction at a time, overall tracing a rectangle
@@ -289,7 +295,9 @@ void move_to_full(double x0new, double x1new, double waittime) {
   move_to_axis(0, x0new);
   move_to_axis(1, x1new);
 
+  if (B_OUTTRG) digitalWrite(P_OUTTRG, HIGH);
   delay(waittime*1e3);
+  if (B_OUTTRG) digitalWrite(P_OUTTRG, LOW);
 
 }
 
@@ -468,6 +476,10 @@ void setup() {
   pinMode(P0_SSIG_R, INPUT_PULLUP);
   pinMode(P1_SSIG_L, INPUT_PULLUP);
   pinMode(P1_SSIG_R, INPUT_PULLUP);
+
+  // obviously output trigger signal is ouput (initially LOW, gets HIGH only after each movement)
+  pinMode(P_OUTTRG, OUTPUT);
+  digitalWrite(P_OUTTRG, LOW);
 
   // serial port for printouts
   if (B_READ||B_PRINT) Serial.begin(9600);
