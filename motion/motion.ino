@@ -511,7 +511,7 @@ void setup() {
   x0=0;
   x1=0;
   if (B_PRINT) {
-    Serial.print("current positions - timestamp [us], x0 [cm], x1 [cm] =");
+    Serial.print("output: current positions - timestamp [us], x0 [cm], x1 [cm] =");
     Serial.println();
   }
 
