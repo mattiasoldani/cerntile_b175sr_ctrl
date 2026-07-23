@@ -533,6 +533,7 @@ void loop() {
       if (B_CONTDAQ) digitalWrite(P_OUTTRG, HIGH);
 
       for (int ipath = 0; ipath < n_path_points; ipath++) {
+        print_pos(B_PRINT);
         move_to_full(x0_path[ipath], x1_path[ipath], waittime_path[ipath], B_OUTTRG && !B_CONTDAQ);
       }
 
@@ -544,6 +545,7 @@ void loop() {
 
       if (!b_finished) {
         get_to_pit_stop();
+        print_pos(B_PRINT);
         b_finished = 1;
       } else {delay(1000);}
       
