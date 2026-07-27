@@ -294,8 +294,11 @@ void move_to_axis(int iax, double xnew) {
 // move to a new 2D (absolute) position (in cm) and wait a set amount of time (in s)
 void move_to_full(double x0new, double x1new, double waittime, bool b_outtrg_single=false) {
 
+  print_pos(B_PRINT);
   move_to_axis(0, x0new);
+  print_pos(B_PRINT);
   move_to_axis(1, x1new);
+  print_pos(B_PRINT);
 
   if (b_outtrg_single) digitalWrite(P_OUTTRG, HIGH);
   delay(waittime*1e3);
@@ -533,7 +536,6 @@ void loop() {
       if (B_CONTDAQ) digitalWrite(P_OUTTRG, HIGH);
 
       for (int ipath = 0; ipath < n_path_points; ipath++) {
-        print_pos(B_PRINT);
         move_to_full(x0_path[ipath], x1_path[ipath], waittime_path[ipath], B_OUTTRG && !B_CONTDAQ);
       }
 
