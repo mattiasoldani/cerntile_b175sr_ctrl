@@ -78,7 +78,7 @@ double t_init = 0;
 // specific variables for path reading and parsing
 // started from https://forum.arduino.cc/t/serial-input-basics-updated/382007/3 (example 5)
 // then improved with OpenAI Codex (GPT-5.5)
-const int max_path_points = 256;
+const int max_path_points = 512;
 const byte max_token_chars = 24;
 int n_path_points = 0;
 float x0_path[max_path_points] = {0.0};
