@@ -1,3 +1,9 @@
+# software to start the Arduino program execution and log output data
+# created by M. Soldani (Meyrin, 2026) - developed with the help of OpenAI Codex (GPT-5.5)
+
+# usage example: python3 runserial.py data/input/path_default_large_long.txt
+# (scan program file path is optional - default is data/input/path_default.txt)
+
 import datetime
 import serial
 import sys

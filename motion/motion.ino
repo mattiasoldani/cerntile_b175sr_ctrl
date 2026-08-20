@@ -1,3 +1,6 @@
+// software to control the TileCal Sr-90 movable stage in CERN bldg 175
+// created by M. Soldani (Meyrin, 2026) - developed with the help of OpenAI Codex (GPT-5.5)
+
 // master, motor
 #define P0_ENA 4
 #define P0_DIR 3
